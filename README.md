@@ -1,4 +1,4 @@
-# Running a Data Processing Job on EMR Serverless with AWS Step Functions and AWS Lambda using Terraform (By HashiCorp)
+# Run a data processing job on Amazon EMR Serverless with AWS Step Functions
 
 
 In this blog we showcase how to build and orchestrate a [Scala](https://www.scala-lang.org/) Spark Application using [Amazon EMR Serverless](https://aws.amazon.com/emr/serverless/) , AWS Step Functions and [Terraform By HashiCorp](https://www.terraform.io/). In this end to end solution we execute a Spark job on EMR Serverless which processes sample click-stream data in Amazon S3 bucket and stores the aggregation results in Amazon S3. 
@@ -138,6 +138,7 @@ EMR Studio
 
 * Open AWS Console, Navigate to “EMR” > “Serverless” tab on the left pane.
 * Select “clicklogger-dev-studio” and click “Manage Applications”
+* The Application created by the stack will be as shown below clicklogger-dev-loggregator-emr-<Your-Account-Number>
 
  
   
