@@ -8,15 +8,36 @@ resource "aws_sfn_state_machine" "sfn_state_machine" {
 
   definition = <<EOF
 {
-  "Comment": "Start EMR Serverless Job using an AWS Lambda Function",
+  "Comment": "Submit job to EMR Serverless.",
   "StartAt": "StartEMRServerlessJob",
   "States": {
     "StartEMRServerlessJob": {
+     "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:emrserverless:startJobRun",
+      "Next": "CheckStatus",
+      "Parameters": {
+        "ApplicationId": "${aws_emrserverless_application.click_log_loggregator_emr_serverless.id}",
+        "ClientToken.$": "States.UUID()",
+        "Name": "${aws_emrserverless_application.click_log_loggregator_emr_serverless.name}",
+        "ExecutionRoleArn": "${aws_iam_role.click_logger_emr_serverless_role.arn}",
+        "JobDriver": {
+          "SparkSubmit": {
+            "EntryPoint": "s3://${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}/${var.loggregator_jar}",
+            "EntryPointArguments.$": "States.Array($.InputDate, '${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}', '${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}')",
+            "SparkSubmitParameters": "--class com.examples.clicklogger.Loggregator"
+          }
+        }
+     }
+    },
+    "CheckStatus": {
+      "Comment": "Lambda to check status of job submitted to EMR Serverless.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "${aws_lambda_function.lambda_clicklogger_emr_start_job.arn}",
-        "Payload": {}
+        "FunctionName": "${aws_lambda_function.lambda_clicklogger_emr_job_status.arn}",
+        "Payload": {
+          "jobRunId.$": "$.JobRunId"
+        }
       },
       "Next": "Success",
       "Retry": [
