@@ -123,7 +123,7 @@ Validate the Deployments
     "InputDate": "2023-02-08"
   }
   ```
-  * Once the AWS Step Function is successful, navigate to Amazon S3 > clicklogger-dev-outputs-bucket- to see the output files.
+  * Once the AWS Step Function is successful, navigate to Amazon S3 > <your-region>-clicklogger-dev-loggregator-output-<your-Account-Number> to see the output files.
   * These will be partitioned by year/month/date/response.md. A sample is shown below
  
 ![Alt text](assets/s3_output_response_file.png?raw=true "Title")
@@ -188,11 +188,19 @@ S3 and created services can be deleted using CLI also. Execute the below command
 
 # CLI Commands to delete the S3  
 
-aws s3 rb s3://clicklogger-dev-emr-serverless-logs-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-firehose-delivery-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-output-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-source-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-source-bucket-<your-account-number> --force
+APP_DIR=$PWD
+APP_PREFIX=clicklogger
+STAGE_NAME=dev
+REGION=us-east-1
+
+ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
+echo $ACCOUNT_ID
+
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-emr-logs-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-firehose-delivery-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-loggregator-output-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-loggregator-source-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-emr-studio-$ACCOUNT_ID --force
 
 # Destroy the AWS Infrastructure 
 terraform destroy --auto-approve
