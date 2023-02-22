@@ -117,7 +117,7 @@ Validate the Deployments
 * Run AWS Step Function to validate the Serverless application
   * Open AWS Console > AWS Step Function > Open "clicklogger-dev-state-machine".
   * The step function will show the steps that ran to trigger the AWS Lambda and Job submission to EMR Serverless Application
-  * Start a new StepFunctions execution to trigger the workflow with the sample input below:
+  * Start a new StepFunctions execution to trigger the workflow with the sample input below. Enter the date value equal to the date when sample data was ingested to S3 with the ingest lambda.
   ```
   {
     "InputDate": "2023-02-08"
