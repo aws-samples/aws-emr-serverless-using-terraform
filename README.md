@@ -137,7 +137,7 @@ $ aws emr-serverless list-applications \
 
 ```
 
-![Alt text](assets/step_function_success.svg?raw=true "Title")
+![Alt text](assets/step_function_success.png?raw=true "Title")
 
 EMR Studio
 
