@@ -4,8 +4,8 @@
 
 data "aws_iam_policy_document" "AWSLambdaTrustPolicy" {
   statement {
-    actions    = ["sts:AssumeRole"]
-    effect     = "Allow"
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
     principals {
       type        = "Service"
       identifiers = ["lambda.amazonaws.com"]
@@ -14,7 +14,7 @@ data "aws_iam_policy_document" "AWSLambdaTrustPolicy" {
 }
 
 resource "aws_iam_role" "click_logger_emr_lambda_role" {
-  name = "${var.app_prefix}-${var.stage_name}-lambda-emr-role"
+  name               = "${var.app_prefix}-${var.stage_name}-lambda-emr-role"
   assume_role_policy = data.aws_iam_policy_document.AWSLambdaTrustPolicy.json
 }
 
@@ -65,14 +65,9 @@ EOF
 }
 
 resource "aws_iam_role" "click_logger_lambda_role" {
-  name = "${var.app_prefix}-${var.stage_name}-lambda-role"
+  name               = "${var.app_prefix}-${var.stage_name}-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.AWSLambdaTrustPolicy.json
 }
-
-# resource "aws_iam_role_policy_attachment" "click_loggerlambda_policy" {
-#   role       = aws_iam_role.click_logger_lambda_role.name
-#   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-# }
 
 resource "aws_iam_role_policy_attachment" "click_logger_lambda_iam_role_policy_attachment_vpc_access_execution" {
   role       = aws_iam_role.click_logger_lambda_role.name
@@ -147,6 +142,7 @@ resource "aws_iam_role_policy" "click_logger_stream_consumer_inline_policy" {
                 "glue:GetDataBases",
                 "glue:CreateTable",
                 "glue:GetTable",
+                "glue:GetTableVersions",
                 "glue:UpdateTable",
                 "glue:DeleteTable",
                 "glue:GetTables",
@@ -165,8 +161,8 @@ EOF
 
 data "aws_iam_policy_document" "click_logger_emr_s3_and_glue_inline_policy" {
   statement {
-    actions    = ["sts:AssumeRole"]
-    effect     = "Allow"
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
     principals {
       type        = "Service"
       identifiers = ["emr-serverless.amazonaws.com"]
@@ -175,7 +171,7 @@ data "aws_iam_policy_document" "click_logger_emr_s3_and_glue_inline_policy" {
 }
 
 resource "aws_iam_role" "click_logger_emr_serverless_role" {
-  name = "${var.app_prefix}-${var.stage_name}-emr-serverless-role"
+  name               = "${var.app_prefix}-${var.stage_name}-emr-serverless-role"
   assume_role_policy = data.aws_iam_policy_document.click_logger_emr_s3_and_glue_inline_policy.json
 }
 
@@ -246,18 +242,18 @@ EOF
 
 data "aws_iam_policy_document" "lambda_clicklogger_emr_sfn_start_job_policy" {
   statement {
-    actions    = ["sts:AssumeRole"]
-    effect     = "Allow"
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
     principals {
       type        = "Service"
-      identifiers = ["states.amazonaws.com"]
+      identifiers = ["states.amazonaws.com", "preprod.states.aws.internal"]
     }
   }
 }
 
 
 resource "aws_iam_role" "lambda_clicklogger_emr_sfn_start_job_role" {
-  name = "${var.app_prefix}-${var.stage_name}-sfn-lambda-role"
+  name               = "${var.app_prefix}-${var.stage_name}-sfn-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_clicklogger_emr_sfn_start_job_policy.json
 }
 
@@ -287,8 +283,65 @@ resource "aws_iam_role_policy" "lambda_clicklogger_emr_sfn_start_job_inline_poli
                 "lambda:InvokeFunction"
             ],
             "Resource": [
-                "${aws_lambda_function.lambda_clicklogger_emr_start_job.arn}"
+                "${aws_lambda_function.lambda_clicklogger_emr_job_status.arn}"
             ]
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "clicklogger_emr_sfn_start_job_inline_policy" {
+  name   = "${var.app_prefix}-${var.stage_name}-emr-job-inline_policy"
+  role   = aws_iam_role.lambda_clicklogger_emr_sfn_start_job_role.id
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "EMRStudioCreate",
+            "Effect": "Allow",
+            "Action": [
+                "elasticmapreduce:CreateStudioPresignedUrl",
+                "elasticmapreduce:DescribeStudio",
+                "elasticmapreduce:CreateStudio",
+                "elasticmapreduce:ListStudios"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "EMRServerlessFullAccess",
+            "Effect": "Allow",
+            "Action": [
+                "emr-serverless:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AllowEC2ENICreationWithEMRTags",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateNetworkInterface"
+            ],
+            "Resource": [
+                "arn:aws:ec2:*:*:network-interface/*"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "aws:CalledViaLast": "ops.emr-serverless.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "AllowEMRServerlessServiceLinkedRoleCreation",
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::*:role/aws-service-role/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:PassRole",
+            "Resource": "*"
         }
     ]
 }
@@ -298,8 +351,8 @@ EOF
 // Role for EMR Studio
 data "aws_iam_policy_document" "emr_studio_policy_doc" {
   statement {
-    actions    = ["sts:AssumeRole"]
-    effect     = "Allow"
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
     principals {
       type        = "Service"
       identifiers = ["elasticmapreduce.amazonaws.com"]
@@ -309,7 +362,7 @@ data "aws_iam_policy_document" "emr_studio_policy_doc" {
 
 
 resource "aws_iam_role" "emr_studio_role" {
-  name = "${var.app_prefix}-${var.stage_name}-emr-studio-role"
+  name               = "${var.app_prefix}-${var.stage_name}-emr-studio-role"
   assume_role_policy = data.aws_iam_policy_document.emr_studio_policy_doc.json
 }
 
@@ -373,10 +426,6 @@ resource "aws_iam_role_policy" "emr_studio_policy" {
                 "iam:ListInstanceProfiles",
                 "iam:ListRolePolicies",
                 "iam:PassRole",
-                "s3:CreateBucket",
-                "s3:Get*",
-                "s3:List*",
-                "s3:Put*",
                 "sdb:BatchPutAttributes",
                 "sdb:Select",
                 "sqs:CreateQueue",
@@ -392,6 +441,28 @@ resource "aws_iam_role_policy" "emr_studio_policy" {
                 "application-autoscaling:PutScalingPolicy",
                 "application-autoscaling:DeleteScalingPolicy",
                 "application-autoscaling:Describe*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetEncryptionConfiguration",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:PutObject*",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "${aws_s3_bucket.click_logger_emr_studio_bucket.arn}",
+                "${aws_s3_bucket.click_logger_emr_studio_bucket.arn}/*",
+                "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}",
+                "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}/*",
+                "${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn}",
+                "${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn}/*",
+                "${aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn}",
+                "${aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn}/*",
+                "${aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn}",
+                "${aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn}/*"
             ]
         },
         {

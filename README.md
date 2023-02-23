@@ -1,5 +1,6 @@
-# Run a data processing job on Amazon EMR Serverless with AWS Step Functions
+# Running a Data Processing Job on EMR Serverless with AWS Step Functions and AWS Lambda using Terraform (By HashiCorp)
 
+*Update Feb 2023* – AWS Step Functions adds direct integration for 35 services including Amazon EMR Serverless. In the current version of this blog, we are able to submit an EMR Serverless job by invoking the APIs directly from a Step Functions workflow. We are using the Lambda only for polling the status of the job in EMR. Read more about this feature enhancement [here](https://aws.amazon.com/about-aws/whats-new/2023/02/aws-step-functions-integration-35-services-emr-serverless/).
 
 In this blog we showcase how to build and orchestrate a [Scala](https://www.scala-lang.org/) Spark Application using [Amazon EMR Serverless](https://aws.amazon.com/emr/serverless/) , AWS Step Functions and [Terraform By HashiCorp](https://www.terraform.io/). In this end to end solution we execute a Spark job on EMR Serverless which processes sample click-stream data in Amazon S3 bucket and stores the aggregation results in Amazon S3. 
  
@@ -18,8 +19,8 @@ Overview of the steps and the AWS Services used in this solution:
 * [Amazon EMR Serverless](https://aws.amazon.com/emr/serverless/) Application - provides the option to submit a Spark job.
 * [AWS Lambda](https://aws.amazon.com/lambda/):
     * Ingestion Lambda – This lambda processes the incoming request and pushes the data into Firehose stream.
-    * EMR Start Job Lambda - This lambda starts the EMR Serverless application, the EMR job process converts the ingested user click logs into output in another S3 bucket.
-* [AWS Step Functions](https://aws.amazon.com/step-functions)  triggers the EMR Start Job Lambda which submits the application to EMR Serverless for processing of the ingested log files.
+    * EMR Job Status Check Lambda - This lambda does a polling mechanism to check the status of the job that was submitted to EMR Serverless.
+* [AWS Step Functions](https://aws.amazon.com/step-functions)  Submits the data processing job to an EMR Serverless application and triggers a Lambda which polls to check the status of the submitted job.
 * [Amazon Simple Storage Service](https://aws.amazon.com/s3/) (Amazon S3)  
     * Firehose Delivery Bucket - Stores the ingested application logs in parquet file format
     * Loggregator Source Bucket - Stores the scala code/jar for EMR job execution
@@ -40,8 +41,8 @@ Overview of the steps and the AWS Services used in this solution:
 
 ### Design Decisions
 
-* We use AWS Step Functions and AWS Lambda in this use case to trigger the EMR Serverless Application. In real world, the data processing application could be long running and may exceed AWS Lambda’s execution timeout.  Tools like [Amazon Managed Workflows for Apache Airflow (MWAA)](https://aws.amazon.com/managed-workflows-for-apache-airflow/) can be used. Amazon Managed Apache airflow is a managed orchestration service makes it easier to set up and operate end-to-end data pipelines in the cloud at scale
-* AWS Lambda Code & EMR Serverless Log Aggregation code are developed using Java & Scala respectively. These can any done using any supported languages in these use cases.
+* We use AWS Step Functions  and its support for SDK Integrations with EMR Serverless to submit the data processing job to the EMR Serverless Application.
+* AWS Lambda Code & EMR Serverless Log Aggregation code are developed using Java & Scala respectively.
 * AWS CLI V2 is required for querying Amazon EMR Serverless applications from command line. These can be viewed from AWS Console also. A sample CLI command provided below in the “Testing” section below.
 
 ### Steps
@@ -64,7 +65,7 @@ To run the commands individually
 Set the application deployment region and account number. An example below. Modify as needed. 
 
 ```
-$ APP_DIR=$PWD
+ $ APP_DIR=$PWD
  $ APP_PREFIX=clicklogger
  $ STAGE_NAME=dev
  $ REGION=us-east-1
@@ -74,9 +75,10 @@ $ APP_DIR=$PWD
 Maven build AWS Lambda Application Jar & Scala Application package
 
 ```
-$ cd $APP_DIR/source/clicklogger
+ $ cd $APP_DIR/source/clicklogger
  $ mvn clean package
-$ sbt reload
+ $ cd $APP_DIR/source/loggregator
+ $ sbt reload
  $ sbt compile
  $ sbt package
 ```
@@ -85,14 +87,13 @@ $ sbt reload
 Deploy the AWS Infrastructure using Terraform
 
 ```
-$ terraform init
+ $ terraform init
  $ terraform plan
  $ terraform apply --auto-approve
 ```
 
 ### Testing
 
- 
 
  Once the application is built and deployed, you can also insert sample data for the EMR processing. An example as below. Note exec.sh has multiple sample insertions for AWS Lambda. The ingested logs will be used by the EMR Serverless Application job
  
@@ -114,11 +115,16 @@ Validate the Deployments
 ![Alt text](assets/s3_source_parquet_files.png?raw=true "Title")
 
 * Run AWS Step Function to validate the Serverless application
-        * Open AWS Console > AWS Step Function > Open "clicklogger-dev-state-machine". 
-        * The step function will show the steps that ran to trigger the AWS Lambda and EMR Serverless Application
-        * Start a new execution to trigger the AWS Lambda and EMR Serverless Application/Job
-        * Once the AWS Step Function is successful, navigate to Amazon S3 > clicklogger-dev-outputs-bucket- to see the output files. 
-        * These will be partitioned by year/month/date/response.md. A sample is shown below
+  * Open AWS Console > AWS Step Function > Open "clicklogger-dev-state-machine".
+  * The step function will show the steps that ran to trigger the AWS Lambda and Job submission to EMR Serverless Application
+  * Start a new StepFunctions execution to trigger the workflow with the sample input below. Enter the date value equal to the date when sample data was ingested to S3 with the ingest lambda.
+  ```
+  {
+    "InputDate": "2023-02-08"
+  }
+  ```
+  * Once the AWS Step Function is successful, navigate to Amazon S3 > <your-region>-clicklogger-dev-loggregator-output-<your-Account-Number> to see the output files.
+  * These will be partitioned by year/month/date/response.md. A sample is shown below
  
 ![Alt text](assets/s3_output_response_file.png?raw=true "Title")
 
@@ -129,7 +135,6 @@ AWS CLI can be used to check the deployed AWS Serverless Application
 $ aws emr-serverless list-applications \
       | jq -r '.applications[] | select(.name=="clicklogger-dev-loggregrator-emr-<Your-Account-Number>").id'
 
-
 ```
 
 ![Alt text](assets/step_function_success.png?raw=true "Title")
@@ -138,7 +143,6 @@ EMR Studio
 
 * Open AWS Console, Navigate to “EMR” > “Serverless” tab on the left pane.
 * Select “clicklogger-dev-studio” and click “Manage Applications”
-* The Application created by the stack will be as shown below clicklogger-dev-loggregator-emr-<Your-Account-Number>
 
  
   
@@ -184,11 +188,19 @@ S3 and created services can be deleted using CLI also. Execute the below command
 
 # CLI Commands to delete the S3  
 
-aws s3 rb s3://clicklogger-dev-emr-serverless-logs-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-firehose-delivery-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-output-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-source-bucket-<your-account-number> --force
-aws s3 rb s3://clicklogger-dev-loggregator-source-bucket-<your-account-number> --force
+APP_DIR=$PWD
+APP_PREFIX=clicklogger
+STAGE_NAME=dev
+REGION=us-east-1
+
+ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
+echo $ACCOUNT_ID
+
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-emr-logs-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-firehose-delivery-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-loggregator-output-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-loggregator-source-$ACCOUNT_ID --force
+aws s3 rb s3://$REGION-$APP_PREFIX-$STAGE_NAME-emr-studio-$ACCOUNT_ID --force
 
 # Destroy the AWS Infrastructure 
 terraform destroy --auto-approve

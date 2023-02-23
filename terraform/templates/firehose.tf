@@ -15,8 +15,8 @@ resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_
     buffer_interval    = 60
     cloudwatch_logging_options {
       enabled = true
-      log_group_name = "/aws/kinesis_firehose_delivery_stream/click_logger_firehose_delivery_stream"
-      log_stream_name = "${var.app_prefix}-${var.stage_name}_firehose_delivery_stream"
+      log_group_name = aws_cloudwatch_log_group.click_logger_firehose_delivery_stream_log_group.name
+      log_stream_name = aws_cloudwatch_log_stream.click_logger_firehose_delivery_stream.name
     }
     compression_format = "UNCOMPRESSED"
     prefix = "clicklog/data=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}/"
