@@ -100,7 +100,7 @@ Deploy the AWS Infrastructure using Terraform
 Below sample AWS CLI Invoke command inserts sample data for the application logs
 
 ```
-aws lambda invoke --function-name clicklogger-dev-ingestion-lambda —cli-binary-format raw-in-base64-out —payload '{"requestid":"OAP-guid-001","contextid":"OAP-ctxt-001","callerid":"OrderingApplication","component":"login","action":"load","type":"webpage"}' out
+aws lambda invoke --function-name clicklogger-dev-ingestion-lambda --cli-binary-format raw-in-base64-out --payload '{"requestid":"OAP-guid-001","contextid":"OAP-ctxt-001","callerid":"OrderingApplication","component":"login","action":"load","type":"webpage"}' out
 ```
 
 Validate the Deployments
@@ -120,10 +120,26 @@ Validate the Deployments
   * Start a new StepFunctions execution to trigger the workflow with the sample input below. Enter the date value equal to the date when sample data was ingested to S3 with the ingest lambda.
   ```
   {
-    "InputDate": "2023-02-08"
+    "InputDate": "2025-07-13"
   }
   ```
-  * Once the AWS Step Function is successful, navigate to Amazon S3 > <your-region>-clicklogger-dev-loggregator-output-<your-Account-Number> to see the output files.
+  * You can run the same using AWS CLI like below.
+  ```
+    aws stepfunctions start-execution \
+      --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --query Account --output text):stateMachine:clicklogger-dev-state-machine" \
+      --name "test-execution-$(date +%s)" \
+      --input '{"InputDate": "2025-07-13"}'
+
+  ```
+  * Once the AWS Step Function is successful, you can view the output files using AWS CLI:
+  ```
+  # List all output files
+  aws s3 ls s3://us-east-1-clicklogger-dev-loggregator-output-$(aws sts get-caller-identity --query Account --output text)/ --recursive
+  
+  # View the output file content
+  aws s3 cp s3://us-east-1-clicklogger-dev-loggregator-output-$(aws sts get-caller-identity --query Account --output text)/2025/07/13/response.md -
+  ```
+  * Or navigate to Amazon S3 > us-east-1-clicklogger-dev-loggregator-output-<your-Account-Number> to see the output files.
   * These will be partitioned by year/month/date/response.md. A sample is shown below
  
 ![Alt text](assets/s3_output_response_file.png?raw=true "Title")

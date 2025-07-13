@@ -11,8 +11,8 @@ resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_
   extended_s3_configuration {
     role_arn           = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
     bucket_arn         = aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn
-    buffer_size        = 64
-    buffer_interval    = 60
+    buffering_size     = 64
+    buffering_interval = 60
     cloudwatch_logging_options {
       enabled = true
       log_group_name = aws_cloudwatch_log_group.click_logger_firehose_delivery_stream_log_group.name
@@ -46,7 +46,7 @@ resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_
         database_name = aws_glue_catalog_database.aws_glue_click_logger_database.name
         role_arn = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
         table_name = aws_glue_catalog_table.aws_glue_click_logger_catalog_table.name
-        region = data.aws_region.current.name
+        region = data.aws_region.current.id
       }
     }
   

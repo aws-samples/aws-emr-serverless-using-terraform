@@ -3,7 +3,7 @@ name := "loggregator"
 version := "0.1"
 
 
-scalaVersion := "2.12.1"
+scalaVersion := "2.12.17"
 
 lazy val root = (project in file(".")).
   settings(

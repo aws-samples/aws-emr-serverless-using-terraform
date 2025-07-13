@@ -8,7 +8,7 @@ resource "aws_lambda_function" "lambda_clicklogger_ingest" {
   function_name = "${var.app_prefix}-${var.stage_name}-ingestion-lambda"
   role          = aws_iam_role.click_logger_lambda_role.arn
   handler       = "com.clicklogs.Handlers.ClickLoggerHandler::handleRequest"
-  runtime       = "java8"
+  runtime       = "java11"
   memory_size   = 2048
   timeout       = 300
 
@@ -20,7 +20,7 @@ resource "aws_lambda_function" "lambda_clicklogger_ingest" {
   environment {
     variables = {
       STREAM_NAME = aws_kinesis_firehose_delivery_stream.click_logger_firehose_delivery_stream.name
-      REGION      = data.aws_region.current.name
+      REGION      = data.aws_region.current.id
     }
   }
 
@@ -36,7 +36,7 @@ resource "aws_lambda_function" "lambda_clicklogger_emr_job_status" {
   function_name = "${var.app_prefix}-${var.stage_name}-emr-job-status-lambda"
   role          = aws_iam_role.click_logger_emr_lambda_role.arn
   handler       = "com.clicklogs.Handlers.ClickLoggerEMRJobHandler::handleRequest"
-  runtime       = "java8"
+  runtime       = "java11"
   memory_size   = 2048
   timeout       = 600
 
@@ -47,7 +47,7 @@ resource "aws_lambda_function" "lambda_clicklogger_emr_job_status" {
     variables = {
       APPLICATION_ID     = aws_emrserverless_application.click_log_loggregator_emr_serverless.id
       LOGS_OUTPUT_PATH   = "s3://${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}"
-      REGION             = data.aws_region.current.name
+      REGION             = data.aws_region.current.id
       EMR_GET_SLEEP_TIME = 5000
     }
   }

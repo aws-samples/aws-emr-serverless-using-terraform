@@ -3,7 +3,7 @@
 ### SPDX-License-Identifier: MIT-0
 
 resource "aws_s3_bucket" "click_log_loggregator_source_s3_bucket" {
-  bucket = "${data.aws_region.current.name}-${var.app_prefix}-${var.stage_name}-loggregator-source-${data.aws_caller_identity.current.account_id}"
+  bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-loggregator-source-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "Loggregator Source S3 Delivery bucket"
@@ -22,7 +22,7 @@ resource "aws_s3_object" "click_log_loggregator_source_s3_bucket_object" {
 
 
 resource "aws_s3_bucket" "click_log_loggregator_output_s3_bucket" {
-  bucket = "${data.aws_region.current.name}-${var.app_prefix}-${var.stage_name}-loggregator-output-${data.aws_caller_identity.current.account_id}"
+  bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-loggregator-output-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "Loggregator Output S3 Delivery bucket"
@@ -31,7 +31,7 @@ resource "aws_s3_bucket" "click_log_loggregator_output_s3_bucket" {
 }
 
 resource "aws_s3_bucket" "click_log_loggregator_emr_serverless_logs_s3_bucket" {
-  bucket = "${data.aws_region.current.name}-${var.app_prefix}-${var.stage_name}-emr-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-emr-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "Loggregator EMR Logs S3 Delivery bucket"
@@ -41,7 +41,7 @@ resource "aws_s3_bucket" "click_log_loggregator_emr_serverless_logs_s3_bucket" {
 
 
 resource "aws_s3_bucket" "click_logger_firehose_delivery_s3_bucket" {
-  bucket = "${data.aws_region.current.name}-${var.app_prefix}-${var.stage_name}-firehose-delivery-${data.aws_caller_identity.current.account_id}"
+  bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-firehose-delivery-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "Firehose S3 Delivery bucket"
@@ -50,7 +50,7 @@ resource "aws_s3_bucket" "click_logger_firehose_delivery_s3_bucket" {
 }
 
 resource "aws_s3_bucket" "click_logger_emr_studio_bucket" {
-  bucket = "${data.aws_region.current.name}-${var.app_prefix}-${var.stage_name}-emr-studio-${data.aws_caller_identity.current.account_id}"
+  bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-emr-studio-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "EMR studio bucket"

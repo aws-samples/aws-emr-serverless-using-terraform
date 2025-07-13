@@ -47,7 +47,7 @@ resource "aws_route_table_association" "click_logger_emr_route_table_association
 }
 
 resource "aws_eip" "click_logger_emr_ip" {
-  vpc = true
+  domain = "vpc"
 
   tags = {
     Name = "${var.app_prefix}-${var.stage_name}-elastic-ip"

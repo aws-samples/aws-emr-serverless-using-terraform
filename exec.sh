@@ -12,9 +12,9 @@ cd $APP_DIR/source/clicklogger
 mvn clean package
 echo 'Building Source EMR Jar'
 cd $APP_DIR/source/loggregator
-# Make sure to have JAVA8 in your PATH
-sbt reload
-sbt compile
+# Build Scala JAR with Java 11 (Minimum)
+sbt clean 
+sbt compile 
 sbt package
 
 echo 'Deploying Terraform Resources'
