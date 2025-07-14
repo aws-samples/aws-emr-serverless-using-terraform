@@ -25,4 +25,16 @@ variable "loggregator_jar" {
   default = "loggregator-0-0.1.jar"
 }
 
+variable "use_emr_on_ec2" {
+  description = "Flag to use EMR on EC2 instead of EMR Serverless"
+  type        = bool
+  default     = false
+}
+
+variable "ec2_key_name" {
+  description = "EC2 Key Pair name for EMR cluster"
+  type        = string
+  default     = ""
+}
+
 

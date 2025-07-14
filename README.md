@@ -184,6 +184,71 @@ Reviewing the Serverless Application Output:
  *07-28-2022*|OrderingApplication|products|2
 ```
 
+## To run the same process with EC2 on EMR
+# Note When set this flag, a long running EMR cluster is created by default
+- on the "exec.sh"
+```
+export USE_EMR_ON_EC2=true
+export EC2_KEY_NAME=""  # Leave empty if no SSH access needed
+./exec.sh
+```
+- or run the below command
+```
+
+terraform apply -var="use_emr_on_ec2=true" -var="ec2_key_name=" --auto-approve
+
+```
+
+- To trigger the EMR on EC2 Step Function
+
+# For Transient cluster: Creates cluster on-demand, runs job, and auto-terminates
+aws stepfunctions start-execution \
+  --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --query Account --output text):stateMachine:clicklogger-dev-emr-transient-state-machine" \
+  --input '{"InputDate": "2025-07-13"}'
+```
+
+```
+# For EMR on EC2 - Long-running cluster (current): Uses the existing cluster with auto-termination after 1 hour of inactivity
+./create-emr-cluster.sh 
+
+# to check the EMR cluster created
+aws emr list-clusters --active --query 'Clusters[?Name==`clicklogger-dev-emr-cluster`].Id' --output text
+
+# Replace the EMR Cluster Id
+CLUSTER_ID=$(aws emr list-clusters --active --query 'Clusters[?Name==`clicklogger-dev-emr-cluster`].Id' --output text)
+
+aws stepfunctions start-execution \
+  --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --query Account --output text):stateMachine:clicklogger-dev-emr-ec2-state-machine" \
+  --input "{\"InputDate\": \"2025-07-13\", \"ClusterId\": \"$CLUSTER_ID\"}"
+
+ex: aws stepfunctions start-execution \
+  --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --query Account --output text):stateMachine:clicklogger-dev-emr-ec2-state-machine" \
+  --input '{"InputDate": "2025-07-13", "ClusterId": "j-EAP293XI17XB"}'
+
+# Or, execute the below command to get the clusterid and trigger the stepfunction
+  aws stepfunctions start-execution \
+  --state-machine-arn "arn:aws:states:us-east-1:$(aws sts get-caller-identity --query Account --output text):stateMachine:clicklogger-dev-emr-ec2-state-machine" \
+  --input "{\"InputDate\": \"2025-07-13\", \"ClusterId\": \"$(aws emr list-clusters --active --query 'Clusters[?contains(Name, \`clicklogger-dev\`)].Id' --output text)\"}"
+
+# CLI to terminate your cluster
+CLUSTER_ID=$(aws emr list-clusters --active --query 'Clusters[?Name==`clicklogger-dev-emr-cluster`].Id' --output text)
+if [ ! -z "$CLUSTER_ID" ]; then
+  aws emr terminate-clusters --cluster-ids $CLUSTER_ID
+else
+  echo "No active cluster found with name 'clicklogger-dev-emr-cluster'"
+fi
+
+
+# View EMR cluster logs
+aws s3 ls s3://us-east-1-clicklogger-dev-emr-logs-$(aws sts get-caller-identity --query Account --output text)/emr-logs/ --recursive
+
+# View Spark application logs
+aws s3 ls s3://us-east-1-clicklogger-dev-emr-logs-$(aws sts get-caller-identity --query Account --output text)/spark-logs/ --recursive
+
+# Download specific log files
+aws s3 cp s3://us-east-1-clicklogger-dev-emr-logs-$(aws sts get-caller-identity --query Account --output text)/emr-logs/ . --recursive
+
+
 ## Cleanup
 
 

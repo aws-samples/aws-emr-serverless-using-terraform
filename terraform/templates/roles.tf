@@ -318,6 +318,19 @@ resource "aws_iam_role_policy" "clicklogger_emr_sfn_start_job_inline_policy" {
             "Resource": "*"
         },
         {
+            "Sid": "EMROnEC2FullAccess",
+            "Effect": "Allow",
+            "Action": [
+                "elasticmapreduce:AddJobFlowSteps",
+                "elasticmapreduce:DescribeStep",
+                "elasticmapreduce:DescribeCluster",
+                "elasticmapreduce:ListSteps",
+                "elasticmapreduce:RunJobFlow",
+                "elasticmapreduce:TerminateJobFlows"
+            ],
+            "Resource": "*"
+        },
+        {
             "Sid": "AllowEC2ENICreationWithEMRTags",
             "Effect": "Allow",
             "Action": [

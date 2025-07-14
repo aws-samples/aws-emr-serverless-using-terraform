@@ -39,6 +39,13 @@ resource "aws_s3_bucket" "click_log_loggregator_emr_serverless_logs_s3_bucket" {
   }
 }
 
+# Create spark-logs folder
+resource "aws_s3_object" "spark_logs_folder" {
+  bucket = aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id
+  key    = "spark-logs/"
+  content = ""
+}
+
 
 resource "aws_s3_bucket" "click_logger_firehose_delivery_s3_bucket" {
   bucket = "${data.aws_region.current.id}-${var.app_prefix}-${var.stage_name}-firehose-delivery-${data.aws_caller_identity.current.account_id}"

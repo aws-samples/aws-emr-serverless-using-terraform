@@ -1,5 +1,10 @@
 #! /bin/bash
 
+# Configuration
+# Note When set this flag, a long running EMR cluster is created by default
+USE_EMR_ON_EC2=${USE_EMR_ON_EC2:-false}
+EC2_KEY_NAME=${EC2_KEY_NAME:-""}
+
 echo $PWD
 APP_DIR=$PWD
 APP_PREFIX=clicklogger
@@ -7,22 +12,24 @@ STAGE_NAME=dev
 REGION=us-east-1
 ACCOUNT_ID=$(aws sts get-caller-identity | jq -r '.Account')
 
+echo "Using EMR on EC2: $USE_EMR_ON_EC2"
+
 echo 'Building Source Lambda Jar'
 cd $APP_DIR/source/clicklogger
 mvn clean package
 echo 'Building Source EMR Jar'
 cd $APP_DIR/source/loggregator
-# Build Scala JAR with Java 11 (Minimum)
-sbt clean 
-sbt compile 
-sbt package
+# Build Scala JAR with Java 11
+sbt clean
+sbt compile
+sbt package 
 
 echo 'Deploying Terraform Resources'
 cd $APP_DIR/terraform/workspaces/$REGION
 
 terraform init
-terraform plan
-terraform apply  --auto-approve
+terraform plan -var="use_emr_on_ec2=$USE_EMR_ON_EC2" -var="ec2_key_name=$EC2_KEY_NAME"
+terraform apply -var="use_emr_on_ec2=$USE_EMR_ON_EC2" -var="ec2_key_name=$EC2_KEY_NAME" --auto-approve
 # shellcheck disable=SC2103
 
 cd $APP_DIR
