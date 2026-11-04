@@ -88,3 +88,17 @@ resource "aws_glue_catalog_table" "aws_glue_click_logger_catalog_table" {
     }
   }
 }
+
+# Accounts that have opted into Lake Formation permissions (no IAM_ALLOWED_PRINCIPALS
+# defaults) require an explicit grant before Firehose can read the table schema for
+# Parquet conversion; IAM glue:GetTable alone is not sufficient. In accounts still using
+# IAM-only access control this grant is harmless.
+resource "aws_lakeformation_permissions" "firehose_table_describe" {
+  principal   = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
+  permissions = ["DESCRIBE"]
+
+  table {
+    database_name = aws_glue_catalog_database.aws_glue_click_logger_database.name
+    name          = aws_glue_catalog_table.aws_glue_click_logger_catalog_table.name
+  }
+}

@@ -6,6 +6,13 @@ resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_
   name        = "${var.app_prefix}-${var.stage_name}-firehose-delivery-stream"
   destination = "extended_s3"
 
+  # Firehose validates schema access at creation time, so the IAM policy and the
+  # Lake Formation grant must both be in place first.
+  depends_on = [
+    aws_iam_role_policy.click_logger_stream_consumer_inline_policy,
+    aws_lakeformation_permissions.firehose_table_describe,
+  ]
+
   extended_s3_configuration {
     role_arn           = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
     bucket_arn         = aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn
