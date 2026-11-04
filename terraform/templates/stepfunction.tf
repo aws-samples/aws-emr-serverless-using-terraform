@@ -4,91 +4,76 @@
 
 resource "aws_sfn_state_machine" "sfn_state_machine" {
   name     = "${var.app_prefix}-${var.stage_name}-state-machine"
-  role_arn = aws_iam_role.lambda_clicklogger_emr_sfn_start_job_role.arn
+  role_arn = aws_iam_role.click_logger_sfn_role.arn
 
-  definition = <<EOF
-{
-  "Comment": "Submit job to EMR Serverless.",
-  "StartAt": "StartEMRServerlessJob",
-  "States": {
-    "StartEMRServerlessJob": {
-     "Type": "Task",
-      "Resource": "arn:aws:states:::aws-sdk:emrserverless:startJobRun",
-      "Next": "CheckStatus",
-      "Parameters": {
-        "ApplicationId": "${aws_emrserverless_application.click_log_loggregator_emr_serverless.id}",
-        "ClientToken.$": "States.UUID()",
-        "Name": "${aws_emrserverless_application.click_log_loggregator_emr_serverless.name}",
-        "ExecutionRoleArn": "${aws_iam_role.click_logger_emr_serverless_role.arn}",
-        "JobDriver": {
-          "SparkSubmit": {
-            "EntryPoint": "s3://${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}/${var.loggregator_jar}",
-            "EntryPointArguments.$": "States.Array($.InputDate, '${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}', '${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}')",
-            "SparkSubmitParameters": "--class com.examples.clicklogger.Loggregator"
-          }
-        }
-     }
-    },
-    "CheckStatus": {
-      "Comment": "Lambda to check status of job submitted to EMR Serverless.",
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${aws_lambda_function.lambda_clicklogger_emr_job_status.arn}",
-        "Payload": {
-          "jobRunId.$": "$.JobRunId"
-        }
-      },
-      "Next": "Success",
-      "Retry": [
-          {
-          "ErrorEquals": [
-              "function.MaxDepthError",
-              "function.MaxDepthError",
-              "Lambda.TooManyRequestsException",
-              "Lambda.ServiceException",
-              "Lambda.Unknown"
-          ],
-          "IntervalSeconds": 1,
-          "MaxAttempts": 2
-          }
-      ],
-      "Catch": [
-            {
-              "ErrorEquals": [
-                  "com.clicklogs.model.ClickLoggerException"
-                ],
-                "Next": "CaughtException"
-            },
-            {
-              "ErrorEquals": [
-                  "States.ALL"
-                ],
-                "Next": "UncaughtException"
+  logging_configuration {
+    log_destination        = "${aws_cloudwatch_log_group.click_logger_sfn_log_group.arn}:*"
+    include_execution_data = true
+    level                  = "ERROR"
+  }
+
+  # The optimized EMR Serverless integration (startJobRun.sync) submits the job and waits
+  # for it to finish. The task fails if the job run ends in FAILED or CANCELLED, and the
+  # job run is cancelled if the execution is stopped. No polling Lambda is required.
+  definition = jsonencode({
+    Comment       = "Run the Loggregator Spark job on EMR Serverless and wait for it to complete."
+    QueryLanguage = "JSONata"
+    StartAt       = "RunLoggregatorJob"
+    States = {
+      RunLoggregatorJob = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::emr-serverless:startJobRun.sync"
+        Arguments = {
+          ApplicationId           = aws_emrserverless_application.click_log_loggregator_emr_serverless.id
+          ClientToken             = "{% $uuid() %}"
+          Name                    = "{% 'loggregator-' & $states.input.InputDate %}"
+          ExecutionRoleArn        = aws_iam_role.click_logger_emr_serverless_role.arn
+          ExecutionTimeoutMinutes = var.emr_job_timeout_minutes
+          JobDriver = {
+            SparkSubmit = {
+              EntryPoint            = "s3://${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}/${var.loggregator_jar}"
+              EntryPointArguments   = "{% [$states.input.InputDate, '${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}', '${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}'] %}"
+              SparkSubmitParameters = "--class com.examples.clicklogger.Loggregator"
             }
-        ],
-        "Next": "Success"
-      },
-      "CaughtException": {
-        "Type": "Pass",
-        "Result": "The function returned an error.",
-        "Next": "Failure"
-      },
-      "UncaughtException": {
-        "Type": "Pass",
-        "Result": "Invocation failed.",
-        "Next": "Failure"
-      },
-      "Success": {
-        "Type": "Pass",
-        "Result": "Invocation succeeded!",
-        "End": true
-      },
-      "Failure": {
-        "Type": "Fail",
-        "Cause": "Execution Failed!"
+          }
+          ConfigurationOverrides = {
+            MonitoringConfiguration = {
+              S3MonitoringConfiguration = {
+                LogUri = "s3://${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}/logs/"
+              }
+              CloudWatchLoggingConfiguration = {
+                Enabled      = true
+                LogGroupName = aws_cloudwatch_log_group.click_logger_emr_serverless_log_group.name
+              }
+            }
+          }
+        }
+        Output = {
+          JobRunId   = "{% $states.result.JobRunId %}"
+          InputDate  = "{% $states.input.InputDate %}"
+          OutputPath = "{% 's3://${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}/' & $replace($states.input.InputDate, '-', '/') & '/response.md' %}"
+        }
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            Next        = "JobFailed"
+            Output      = "{% $states.errorOutput %}"
+          }
+        ]
+        Next = "JobSucceeded"
+      }
+      JobSucceeded = {
+        Type = "Succeed"
+      }
+      JobFailed = {
+        Type  = "Fail"
+        Error = "{% $states.input.Error %}"
+        Cause = "{% $states.input.Cause %}"
       }
     }
+  })
 }
-EOF
+
+output "StateMachineArn" {
+  value = aws_sfn_state_machine.sfn_state_machine.arn
 }

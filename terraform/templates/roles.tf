@@ -2,10 +2,23 @@
 ##
 ### SPDX-License-Identifier: MIT-0
 
-data "aws_iam_policy_document" "AWSLambdaTrustPolicy" {
+locals {
+  account_id  = data.aws_caller_identity.current.account_id
+  region      = data.aws_region.current.region
+  emr_app_arn = aws_emrserverless_application.click_log_loggregator_emr_serverless.arn
+
+  glue_catalog_arn  = "arn:aws:glue:${local.region}:${local.account_id}:catalog"
+  glue_database_arn = "arn:aws:glue:${local.region}:${local.account_id}:database/${aws_glue_catalog_database.aws_glue_click_logger_database.name}"
+  glue_table_arn    = "arn:aws:glue:${local.region}:${local.account_id}:table/${aws_glue_catalog_database.aws_glue_click_logger_database.name}/*"
+}
+
+################################################################################
+# Ingestion Lambda
+################################################################################
+
+data "aws_iam_policy_document" "lambda_trust" {
   statement {
     actions = ["sts:AssumeRole"]
-    effect  = "Allow"
     principals {
       type        = "Service"
       identifiers = ["lambda.amazonaws.com"]
@@ -13,470 +26,246 @@ data "aws_iam_policy_document" "AWSLambdaTrustPolicy" {
   }
 }
 
-resource "aws_iam_role" "click_logger_emr_lambda_role" {
-  name               = "${var.app_prefix}-${var.stage_name}-lambda-emr-role"
-  assume_role_policy = data.aws_iam_policy_document.AWSLambdaTrustPolicy.json
-}
-
-resource "aws_iam_role_policy_attachment" "click_logger_emr_lambda_policy" {
-  role       = aws_iam_role.click_logger_emr_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy_attachment" "click_logger_emr_lambda_iam_role_policy_attachment_vpc_access_execution" {
-  role       = aws_iam_role.click_logger_emr_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-resource "aws_iam_role_policy" "click_logger_emr_lambda_inline_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-emr-lambda-inline_policy"
-  role   = aws_iam_role.click_logger_emr_lambda_role.id
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:GetRole",
-        "iam:PassRole"
-      ],
-      "Resource": [
-        "*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "emr-serverless:CreateApplication",
-        "emr-serverless:StopApplication",
-        "emr-serverless:GetApplication",
-        "emr-serverless:GetJobRun",
-        "emr-serverless:StartJobRun",
-        "emr-serverless:StartApplication"
-      ],
-      "Resource": [
-        "*"
-      ]
-    }
-  ]
-}
-EOF
-}
-
 resource "aws_iam_role" "click_logger_lambda_role" {
   name               = "${var.app_prefix}-${var.stage_name}-lambda-role"
-  assume_role_policy = data.aws_iam_policy_document.AWSLambdaTrustPolicy.json
+  assume_role_policy = data.aws_iam_policy_document.lambda_trust.json
 }
 
-resource "aws_iam_role_policy_attachment" "click_logger_lambda_iam_role_policy_attachment_vpc_access_execution" {
-  role       = aws_iam_role.click_logger_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+data "aws_iam_policy_document" "click_logger_lambda_policy" {
+  statement {
+    sid       = "WriteOwnLogs"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.lambda_click_logger_log_group.arn}:*"]
+  }
+
+  statement {
+    sid       = "PutRecordsToFirehose"
+    actions   = ["firehose:PutRecord", "firehose:PutRecordBatch"]
+    resources = [aws_kinesis_firehose_delivery_stream.click_logger_firehose_delivery_stream.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "click_logger_lambda_policy" {
+  name   = "${var.app_prefix}-${var.stage_name}-lambda-policy"
+  role   = aws_iam_role.click_logger_lambda_role.id
+  policy = data.aws_iam_policy_document.click_logger_lambda_policy.json
+}
+
+################################################################################
+# Amazon Data Firehose delivery role
+################################################################################
+
+data "aws_iam_policy_document" "firehose_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+  }
 }
 
 resource "aws_iam_role" "click_logger_stream_consumer_firehose_role" {
-  name = "${var.app_prefix}-${var.stage_name}-stream-consumer-firehose-role"
-
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "firehose.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
+  name               = "${var.app_prefix}-${var.stage_name}-stream-consumer-firehose-role"
+  assume_role_policy = data.aws_iam_policy_document.firehose_trust.json
 }
-POLICY
+
+data "aws_iam_policy_document" "click_logger_firehose_policy" {
+  statement {
+    sid = "DeliverToS3"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:GetBucketLocation",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:ListBucketMultipartUploads",
+      "s3:PutObject",
+    ]
+    resources = [
+      aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn,
+      "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}/*",
+    ]
+  }
+
+  statement {
+    sid       = "ReadGlueSchemaForParquetConversion"
+    actions   = ["glue:GetTable", "glue:GetTableVersion", "glue:GetTableVersions"]
+    resources = [local.glue_catalog_arn, local.glue_database_arn, local.glue_table_arn]
+  }
+
+  statement {
+    sid       = "WriteDeliveryErrorLogs"
+    actions   = ["logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.click_logger_firehose_delivery_stream_log_group.arn}:*"]
+  }
 }
 
 resource "aws_iam_role_policy" "click_logger_stream_consumer_inline_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-stream-consumer-inline_policy"
+  name   = "${var.app_prefix}-${var.stage_name}-stream-consumer-inline-policy"
   role   = aws_iam_role.click_logger_stream_consumer_firehose_role.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "ReadAccessForEMRSamples",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::*.elasticmapreduce",
-                "arn:aws:s3:::*.elasticmapreduce/*"
-            ]
-        },
-        {
-            "Sid": "FullAccessToOutputBucket",
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:ListBucket",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}/*"
-            ]
-        },
-        {
-            "Sid": "GlueCreateAndReadDataCatalog",
-            "Effect": "Allow",
-            "Action": [
-                "glue:GetDatabase",
-                "glue:CreateDatabase",
-                "glue:GetDataBases",
-                "glue:CreateTable",
-                "glue:GetTable",
-                "glue:GetTableVersions",
-                "glue:UpdateTable",
-                "glue:DeleteTable",
-                "glue:GetTables",
-                "glue:GetPartition",
-                "glue:GetPartitions",
-                "glue:CreatePartition",
-                "glue:BatchCreatePartition",
-                "glue:GetUserDefinedFunctions"
-            ],
-            "Resource": ["*"]
-        }
-    ]
-}
-EOF
+  policy = data.aws_iam_policy_document.click_logger_firehose_policy.json
 }
 
-data "aws_iam_policy_document" "click_logger_emr_s3_and_glue_inline_policy" {
+################################################################################
+# EMR Serverless job execution role
+################################################################################
+
+data "aws_iam_policy_document" "emr_serverless_trust" {
   statement {
     actions = ["sts:AssumeRole"]
-    effect  = "Allow"
     principals {
       type        = "Service"
       identifiers = ["emr-serverless.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
     }
   }
 }
 
 resource "aws_iam_role" "click_logger_emr_serverless_role" {
   name               = "${var.app_prefix}-${var.stage_name}-emr-serverless-role"
-  assume_role_policy = data.aws_iam_policy_document.click_logger_emr_s3_and_glue_inline_policy.json
+  assume_role_policy = data.aws_iam_policy_document.emr_serverless_trust.json
+}
+
+data "aws_iam_policy_document" "click_logger_emr_serverless_policy" {
+  statement {
+    sid     = "ReadJobJarAndInputData"
+    actions = ["s3:GetObject", "s3:ListBucket"]
+    resources = [
+      aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn,
+      "${aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn}/*",
+      aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn,
+      "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}/*",
+    ]
+  }
+
+  statement {
+    sid     = "WriteOutputAndLogs"
+    actions = ["s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteObject"]
+    resources = [
+      aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn,
+      "${aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn}/*",
+      aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn,
+      "${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn}/*",
+    ]
+  }
+
+  # EMR Serverless uses the Glue Data Catalog as the Spark metastore by default and
+  # looks up the "default" database when the Spark session starts.
+  statement {
+    sid     = "ReadGlueDataCatalog"
+    actions = ["glue:GetDatabase", "glue:GetDatabases", "glue:GetTable", "glue:GetTables", "glue:GetPartition", "glue:GetPartitions"]
+    resources = [
+      local.glue_catalog_arn,
+      local.glue_database_arn,
+      local.glue_table_arn,
+      "arn:aws:glue:${local.region}:${local.account_id}:database/default",
+      "arn:aws:glue:${local.region}:${local.account_id}:table/default/*",
+    ]
+  }
+
+  statement {
+    sid       = "DescribeLogGroups"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["arn:aws:logs:${local.region}:${local.account_id}:log-group:*"]
+  }
+
+  statement {
+    sid       = "WriteJobLogsToCloudWatch"
+    actions   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.click_logger_emr_serverless_log_group.arn}:*"]
+  }
 }
 
 resource "aws_iam_role_policy" "click_logger_emr_serverless_inline_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-emr-s3-glue-inline_policy"
+  name   = "${var.app_prefix}-${var.stage_name}-emr-serverless-policy"
   role   = aws_iam_role.click_logger_emr_serverless_role.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "ReadAccessForEMRSamples",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::*.elasticmapreduce",
-                "arn:aws:s3:::*.elasticmapreduce/*"
-            ]
-        },
-        {
-            "Sid": "FullAccessToOutputBucket",
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:ListBucket",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_source_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_output_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}/*",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}",
-                "arn:aws:s3:::${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.id}/*"
-            ]
-        },
-        {
-            "Sid": "GlueCreateAndReadDataCatalog",
-            "Effect": "Allow",
-            "Action": [
-                "glue:GetDatabase",
-                "glue:CreateDatabase",
-                "glue:GetDataBases",
-                "glue:CreateTable",
-                "glue:GetTable",
-                "glue:UpdateTable",
-                "glue:DeleteTable",
-                "glue:GetTables",
-                "glue:GetPartition",
-                "glue:GetPartitions",
-                "glue:CreatePartition",
-                "glue:BatchCreatePartition",
-                "glue:GetUserDefinedFunctions"
-            ],
-            "Resource": ["*"]
-        }
-    ]
-}
-EOF
+  policy = data.aws_iam_policy_document.click_logger_emr_serverless_policy.json
 }
 
+################################################################################
+# Step Functions execution role
+################################################################################
 
-data "aws_iam_policy_document" "lambda_clicklogger_emr_sfn_start_job_policy" {
+data "aws_iam_policy_document" "sfn_trust" {
   statement {
     actions = ["sts:AssumeRole"]
-    effect  = "Allow"
     principals {
       type        = "Service"
-      identifiers = ["states.amazonaws.com", "preprod.states.aws.internal"]
+      identifiers = ["states.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
     }
   }
 }
 
-
-resource "aws_iam_role" "lambda_clicklogger_emr_sfn_start_job_role" {
-  name               = "${var.app_prefix}-${var.stage_name}-sfn-lambda-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_clicklogger_emr_sfn_start_job_policy.json
+resource "aws_iam_role" "click_logger_sfn_role" {
+  name               = "${var.app_prefix}-${var.stage_name}-sfn-role"
+  assume_role_policy = data.aws_iam_policy_document.sfn_trust.json
 }
 
-resource "aws_iam_role_policy_attachment" "click_logger_emr_sfn_lambda_iam_role_policy_attachment_vpc_access_execution" {
-  role       = aws_iam_role.lambda_clicklogger_emr_sfn_start_job_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-resource "aws_iam_role_policy" "lambda_clicklogger_emr_sfn_start_job_inline_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-emr-lambda-inline_policy"
-  role   = aws_iam_role.lambda_clicklogger_emr_sfn_start_job_role.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-          "Action": [
-            "logs:CreateLogStream",
-            "logs:PutLogEvents"
-          ],
-          "Resource": "arn:aws:logs:*:*:*",
-          "Effect": "Allow"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "lambda:InvokeFunction"
-            ],
-            "Resource": [
-                "${aws_lambda_function.lambda_clicklogger_emr_job_status.arn}"
-            ]
-        }
-    ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy" "clicklogger_emr_sfn_start_job_inline_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-emr-job-inline_policy"
-  role   = aws_iam_role.lambda_clicklogger_emr_sfn_start_job_role.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "EMRStudioCreate",
-            "Effect": "Allow",
-            "Action": [
-                "elasticmapreduce:CreateStudioPresignedUrl",
-                "elasticmapreduce:DescribeStudio",
-                "elasticmapreduce:CreateStudio",
-                "elasticmapreduce:ListStudios"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "EMRServerlessFullAccess",
-            "Effect": "Allow",
-            "Action": [
-                "emr-serverless:*"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "AllowEC2ENICreationWithEMRTags",
-            "Effect": "Allow",
-            "Action": [
-                "ec2:CreateNetworkInterface"
-            ],
-            "Resource": [
-                "arn:aws:ec2:*:*:network-interface/*"
-            ],
-            "Condition": {
-                "StringEquals": {
-                    "aws:CalledViaLast": "ops.emr-serverless.amazonaws.com"
-                }
-            }
-        },
-        {
-            "Sid": "AllowEMRServerlessServiceLinkedRoleCreation",
-            "Effect": "Allow",
-            "Action": "iam:CreateServiceLinkedRole",
-            "Resource": "arn:aws:iam::*:role/aws-service-role/*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": "iam:PassRole",
-            "Resource": "*"
-        }
-    ]
-}
-EOF
-}
-
-// Role for EMR Studio
-data "aws_iam_policy_document" "emr_studio_policy_doc" {
+# Permissions for the optimized emr-serverless:startJobRun.sync integration, following
+# https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr-serverless.html
+data "aws_iam_policy_document" "click_logger_sfn_policy" {
   statement {
-    actions = ["sts:AssumeRole"]
-    effect  = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["elasticmapreduce.amazonaws.com"]
+    sid       = "StartJobRun"
+    actions   = ["emr-serverless:StartJobRun"]
+    resources = [local.emr_app_arn]
+  }
+
+  statement {
+    sid       = "TrackAndCancelJobRun"
+    actions   = ["emr-serverless:GetJobRun", "emr-serverless:CancelJobRun"]
+    resources = ["${local.emr_app_arn}/jobruns/*"]
+  }
+
+  statement {
+    sid       = "PassJobExecutionRole"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.click_logger_emr_serverless_role.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["emr-serverless.amazonaws.com"]
     }
+  }
+
+  statement {
+    sid       = "ManagedRuleForSyncIntegration"
+    actions   = ["events:PutTargets", "events:PutRule", "events:DescribeRule"]
+    resources = ["arn:aws:events:${local.region}:${local.account_id}:rule/StepFunctionsGetEventsForEMRServerlessJobRule"]
+  }
+
+  # CloudWatch Logs delivery actions don't support resource-level permissions.
+  statement {
+    sid = "DeliverExecutionLogs"
+    actions = [
+      "logs:CreateLogDelivery",
+      "logs:GetLogDelivery",
+      "logs:UpdateLogDelivery",
+      "logs:DeleteLogDelivery",
+      "logs:ListLogDeliveries",
+      "logs:PutResourcePolicy",
+      "logs:DescribeResourcePolicies",
+      "logs:DescribeLogGroups",
+    ]
+    resources = ["*"]
   }
 }
 
-
-resource "aws_iam_role" "emr_studio_role" {
-  name               = "${var.app_prefix}-${var.stage_name}-emr-studio-role"
-  assume_role_policy = data.aws_iam_policy_document.emr_studio_policy_doc.json
+resource "aws_iam_role_policy" "click_logger_sfn_policy" {
+  name   = "${var.app_prefix}-${var.stage_name}-sfn-policy"
+  role   = aws_iam_role.click_logger_sfn_role.id
+  policy = data.aws_iam_policy_document.click_logger_sfn_policy.json
 }
-
-resource "aws_iam_role_policy" "emr_studio_policy" {
-  name   = "${var.app_prefix}-${var.stage_name}-emr-studio-policy"
-  role   = aws_iam_role.emr_studio_role.id
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Resource": "*",
-            "Action": [
-                "ec2:AuthorizeSecurityGroupEgress",
-                "ec2:AuthorizeSecurityGroupIngress",
-                "ec2:CancelSpotInstanceRequests",
-                "ec2:CreateFleet",
-                "ec2:CreateLaunchTemplate",
-                "ec2:CreateNetworkInterface",
-                "ec2:CreateSecurityGroup",
-                "ec2:CreateTags",
-                "ec2:DeleteLaunchTemplate",
-                "ec2:DeleteNetworkInterface",
-                "ec2:DeleteSecurityGroup",
-                "ec2:DeleteTags",
-                "ec2:DescribeAvailabilityZones",
-                "ec2:DescribeAccountAttributes",
-                "ec2:DescribeDhcpOptions",
-                "ec2:DescribeImages",
-                "ec2:DescribeInstanceStatus",
-                "ec2:DescribeInstances",
-                "ec2:DescribeKeyPairs",
-                "ec2:DescribeLaunchTemplates",
-                "ec2:DescribeNetworkAcls",
-                "ec2:DescribeNetworkInterfaces",
-                "ec2:DescribePrefixLists",
-                "ec2:DescribeRouteTables",
-                "ec2:DescribeSecurityGroups",
-                "ec2:DescribeSpotInstanceRequests",
-                "ec2:DescribeSpotPriceHistory",
-                "ec2:DescribeSubnets",
-                "ec2:DescribeTags",
-                "ec2:DescribeVpcAttribute",
-                "ec2:DescribeVpcEndpoints",
-                "ec2:DescribeVpcEndpointServices",
-                "ec2:DescribeVpcs",
-                "ec2:DetachNetworkInterface",
-                "ec2:ModifyImageAttribute",
-                "ec2:ModifyInstanceAttribute",
-                "ec2:RequestSpotInstances",
-                "ec2:RevokeSecurityGroupEgress",
-                "ec2:RunInstances",
-                "ec2:TerminateInstances",
-                "ec2:DeleteVolume",
-                "ec2:DescribeVolumeStatus",
-                "ec2:DescribeVolumes",
-                "ec2:DetachVolume",
-                "iam:GetRole",
-                "iam:GetRolePolicy",
-                "iam:ListInstanceProfiles",
-                "iam:ListRolePolicies",
-                "iam:PassRole",
-                "sdb:BatchPutAttributes",
-                "sdb:Select",
-                "sqs:CreateQueue",
-                "sqs:Delete*",
-                "sqs:GetQueue*",
-                "sqs:PurgeQueue",
-                "sqs:ReceiveMessage",
-                "cloudwatch:PutMetricAlarm",
-                "cloudwatch:DescribeAlarms",
-                "cloudwatch:DeleteAlarms",
-                "application-autoscaling:RegisterScalableTarget",
-                "application-autoscaling:DeregisterScalableTarget",
-                "application-autoscaling:PutScalingPolicy",
-                "application-autoscaling:DeleteScalingPolicy",
-                "application-autoscaling:Describe*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetEncryptionConfiguration",
-                "s3:GetObject",
-                "s3:ListBucket",
-                "s3:PutObject*",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "${aws_s3_bucket.click_logger_emr_studio_bucket.arn}",
-                "${aws_s3_bucket.click_logger_emr_studio_bucket.arn}/*",
-                "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}",
-                "${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn}/*",
-                "${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn}",
-                "${aws_s3_bucket.click_log_loggregator_emr_serverless_logs_s3_bucket.arn}/*",
-                "${aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn}",
-                "${aws_s3_bucket.click_log_loggregator_source_s3_bucket.arn}/*",
-                "${aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn}",
-                "${aws_s3_bucket.click_log_loggregator_output_s3_bucket.arn}/*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": "iam:CreateServiceLinkedRole",
-            "Resource": "arn:aws:iam::*:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot*",
-            "Condition": {
-                "StringLike": {
-                    "iam:AWSServiceName": "spot.amazonaws.com"
-                }
-            }
-        }
-    ]
-}
-EOF
-}
-

@@ -1,149 +1,84 @@
 package com.examples.clicklogger
 
-import org.apache.spark.{SparkConf, SparkContext, sql}
-import org.apache.spark.sql.{DataFrameReader, SQLContext, SparkSession}
-import java.lang.Boolean
-import java.util
-import java.io.IOException
-import java.text.Format
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.nio.charset.StandardCharsets
+import java.time.LocalDate
 
-import com.amazonaws.AmazonServiceException
-import com.amazonaws.SdkClientException
-import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import org.apache.commons.lang3.StringUtils
-
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT-0
  */
- 
+
+/**
+ * Aggregates a day of click logs (Parquet, written by Amazon Data Firehose) into a
+ * Markdown report.
+ *
+ * Arguments: <yyyy-MM-dd | ALL> <firehose-delivery-bucket> <output-bucket>
+ *
+ * S3 access uses the EMR S3 file system (s3://) provided by the EMR Serverless runtime,
+ * so the job doesn't bundle an AWS SDK and needs no S3 endpoint or credentials setup.
+ * Any failure raises an exception, which fails the job run and the Step Functions task.
+ */
 object Loggregator {
 
-  private var sourceBucketName = ""
-  private var outputBucketName = ""
-  private var region = ""
-
-  private var configMap = new util.HashMap[String, String]
-
   def main(args: Array[String]): Unit = {
+    require(args.length == 3, "Usage: Loggregator <yyyy-MM-dd|ALL> <source-bucket> <output-bucket>")
+    val Array(date, sourceBucket, outputBucket) = args
 
-    if (args.length != 3) {
-      System.out.println("Invalid no of Arguments!!!")
-      System.exit(-1)
-    }
-
-    val date = args(0)
-    sourceBucketName = args(1)
-    outputBucketName = args(2)
-
-    System.out.println("Input Date " + date)
-    region = scala.util.Properties.envOrElse("REGION", "us-east-1")
-
-    System.out.format("values receive bucket_name %s, output_bucket_name %s \n", sourceBucketName, outputBucketName)
-
-    val dataFrame = processFiles(date, sourceBucketName)
-    System.out.println("")
-    writeOutputToS3(date, dataFrame, outputBucketName)
-
-    System.out.println("Completed successfully!")
-  }
-
-  private def writeOutputToS3(date: String, dataFrame: sql.DataFrame, outputBucketName: String): String = {
-    var outputResponse: String = "|*createdTime*|*callerid*|*component*|*count*\n"
-
-    if (dataFrame != null) {
-      outputResponse = outputResponse + "|------------|-----------------------|-----------|-------\n"
-      for (row <- dataFrame.rdd.collect) {
-        val createdTime = row.mkString(",").split(",")(0)
-        val callerid = row.mkString(",").split(",")(1)
-        val component = row.mkString(",").split(",")(2)
-        val count = row.mkString(",").split(",")(3)
-        outputResponse = outputResponse + "*" + createdTime + "*|" + callerid + "|" + component + "|" + count + "\n"
-      }
-    }
-    System.out.println("printing output schema from data frame")
-    System.out.println(outputResponse)
-
-    var f = new SimpleDateFormat("yyyy")
-    var year = f.format(new Date())
-    f = new SimpleDateFormat("MM")
-    var month = f.format(new Date())
-    f = new SimpleDateFormat("dd")
-    var onlydate = f.format(new Date())
-
-    // 2020-07-18
-    if (date.length == 10) {
-      val dateArr = date.split("-")
-      year = dateArr(0)
-      month = dateArr(1)
-      onlydate = dateArr(2)
-    }
-
-    var fileObjKeyName = year + "/" + month + "/" + onlydate + "/"
-    if (date.equalsIgnoreCase("ALL")) {
-      fileObjKeyName = "ALL/" + year + "/" + month + "/" + onlydate + "/"
-    }
-    val fileName = "response.md"
-
-    System.out.println("fileObjKeyName  " + fileObjKeyName + "   fileName  " + fileName)
+    val spark = SparkSession.builder().appName("Loggregator").getOrCreate()
     try {
-      val s3Client = AmazonS3ClientBuilder.standard.build
-      s3Client.putObject(outputBucketName, fileObjKeyName + fileName, outputResponse)
-    } catch {
-      case e: AmazonServiceException =>
-        System.out.println(e.getMessage)
-      case e: SdkClientException =>
-        System.out.println(e.getMessage)
+      val aggregated = aggregate(spark, inputPath(date, sourceBucket))
+      aggregated.show(truncate = false)
+
+      val report = toMarkdown(aggregated)
+      val outputKey = s"${outputPrefix(date)}response.md"
+      writeText(spark, new Path(s"s3://$outputBucket/$outputKey"), report)
+      println(s"Wrote report to s3://$outputBucket/$outputKey")
+    } finally {
+      spark.stop()
     }
-
-    return outputResponse
   }
 
+  private def inputPath(date: String, bucket: String): String =
+    if (date.equalsIgnoreCase("ALL")) s"s3://$bucket/clicklog/"
+    else s"s3://$bucket/clicklog/data=$date/"
 
-  def processFiles(date: String, bucket: String): sql.DataFrame = {
-    System.out.println("processing a date - " + date + " from bucket - " + bucket)
-    var s3Path = String.format("s3a://%s/clicklog/data=%s/", bucket, date)
-    var spark = getSparkSession()
-    val s3FolderDF = spark.read.parquet(s3Path)
-    s3FolderDF.createOrReplaceTempView("ClickLoggerTable")
-    return getClickLoggerDataFrame(spark)
+  /** yyyy/MM/dd/ for a specific date, or ALL/yyyy/MM/dd/ (today) for a full run. */
+  private def outputPrefix(date: String): String = {
+    if (date.equalsIgnoreCase("ALL")) {
+      val today = LocalDate.now()
+      f"ALL/${today.getYear}%04d/${today.getMonthValue}%02d/${today.getDayOfMonth}%02d/"
+    } else {
+      val d = LocalDate.parse(date)
+      f"${d.getYear}%04d/${d.getMonthValue}%02d/${d.getDayOfMonth}%02d/"
+    }
   }
 
-  def getClickLoggerDataFrame(spark: SparkSession): sql.DataFrame = {
-    val sql = "select substring(createdTime,0, 10) as createdTime, callerid, component from ClickLoggerTable"
-
-    val clickLoggerDF = spark.sql(sql)
-    clickLoggerDF.groupBy("createdTime", "callerid", "component").count()
-      .orderBy("createdTime", "callerid", "component")
-      .show()
-
-    // DO not printSchema in production
-    clickLoggerDF.printSchema()
-
-    System.out.println("DataFrame for date completed successfully ---------")
-    return clickLoggerDF.groupBy("createdTime", "callerid", "component").count()
-      .orderBy("createdTime", "callerid", "component")
+  def aggregate(spark: SparkSession, path: String): DataFrame = {
+    spark.read.parquet(path).createOrReplaceTempView("ClickLoggerTable")
+    spark.sql(
+      """SELECT substring(createdtime, 0, 10) AS createdTime, callerid, component, count(*) AS count
+        |FROM ClickLoggerTable
+        |GROUP BY 1, 2, 3
+        |ORDER BY 1, 2, 3""".stripMargin)
   }
 
-  def getSparkSession(): SparkSession = {
-    System.out.println("starting spark session -------------")
+  def toMarkdown(df: DataFrame): String = {
+    val header = "|*createdTime*|*callerid*|*component*|*count*\n" +
+      "|------------|-----------------------|-----------|-------\n"
+    val rows = df.collect().map { r =>
+      s"*${r.getString(0)}*|${r.getString(1)}|${r.getString(2)}|${r.getLong(3)}\n"
+    }
+    header + rows.mkString
+  }
 
-    val sparkConfig = new SparkConf()
-    //.setMaster("local[*]")
-    //.setAppName("ClickLogger")
-    val spark: SparkSession = SparkSession.builder()
-      .config(conf = sparkConfig)
-      .getOrCreate()
-    val sparkContext: SparkContext = spark.sparkContext
-    val hadoopConf = sparkContext.hadoopConfiguration
-    hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-    hadoopConf.set("fs.s3a.path.style.access", "true")
-    hadoopConf.set("fs.s3a.endpoint", "s3." + region + ".amazonaws.com")
-    return spark;
+  private def writeText(spark: SparkSession, path: Path, content: String): Unit = {
+    val fs = path.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    val out = fs.create(path, true)
+    try out.write(content.getBytes(StandardCharsets.UTF_8))
+    finally out.close()
   }
 }
