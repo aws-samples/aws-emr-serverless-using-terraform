@@ -10,10 +10,18 @@ output "S3EMRSourceBucket" {
   value = module.clicklogger.S3EMRSourceBucket
 }
 
-output "lambda-clicklogger-ingest" {
+output "S3OutputBucket" {
+  value = module.clicklogger.S3OutputBucket
+}
+
+output "IngestionLambdaName" {
   value = module.clicklogger.lambda-clicklogger-ingest
 }
 
-output "lambda-clicklogger-emr-job" {
-  value = module.clicklogger.lambda-clicklogger-emr-job
+output "EMRServerlessApplicationId" {
+  value = module.clicklogger.EMRServerlessApplicationId
+}
+
+output "StateMachineArn" {
+  value = module.clicklogger.StateMachineArn
 }

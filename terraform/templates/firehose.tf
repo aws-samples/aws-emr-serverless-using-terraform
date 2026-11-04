@@ -3,26 +3,31 @@
 ### SPDX-License-Identifier: MIT-0
 
 resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_stream" {
-  name = "${var.app_prefix}-${var.stage_name}-firehose-delivery-stream"
-  depends_on = [aws_s3_bucket.click_logger_firehose_delivery_s3_bucket]
-  
+  name        = "${var.app_prefix}-${var.stage_name}-firehose-delivery-stream"
   destination = "extended_s3"
-  
+
+  # Firehose validates schema access at creation time, so the IAM policy and the
+  # Lake Formation grant must both be in place first.
+  depends_on = [
+    aws_iam_role_policy.click_logger_stream_consumer_inline_policy,
+    aws_lakeformation_permissions.firehose_table_describe,
+  ]
+
   extended_s3_configuration {
     role_arn           = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
     bucket_arn         = aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn
     buffering_size     = 64
     buffering_interval = 60
     cloudwatch_logging_options {
-      enabled = true
-      log_group_name = aws_cloudwatch_log_group.click_logger_firehose_delivery_stream_log_group.name
+      enabled         = true
+      log_group_name  = aws_cloudwatch_log_group.click_logger_firehose_delivery_stream_log_group.name
       log_stream_name = aws_cloudwatch_log_stream.click_logger_firehose_delivery_stream.name
     }
-    compression_format = "UNCOMPRESSED"
-    prefix = "clicklog/data=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}/"
+    compression_format  = "UNCOMPRESSED"
+    prefix              = "clicklog/data=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}/"
     error_output_prefix = "clicklog_error/error=!{firehose:error-output-type}data=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}/"
 
-    
+
     data_format_conversion_configuration {
       enabled = true
 
@@ -42,13 +47,13 @@ resource "aws_kinesis_firehose_delivery_stream" "click_logger_firehose_delivery_
         }
       }
 
-      schema_configuration  {
+      schema_configuration {
         database_name = aws_glue_catalog_database.aws_glue_click_logger_database.name
-        role_arn = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
-        table_name = aws_glue_catalog_table.aws_glue_click_logger_catalog_table.name
-        region = data.aws_region.current.id
+        role_arn      = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
+        table_name    = aws_glue_catalog_table.aws_glue_click_logger_catalog_table.name
+        region        = data.aws_region.current.region
       }
     }
-  
-   }
+
+  }
 }        

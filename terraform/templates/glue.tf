@@ -3,14 +3,13 @@
 ### SPDX-License-Identifier: MIT-0
 
 resource "aws_glue_catalog_database" "aws_glue_click_logger_database" {
-  name = "${var.app_prefix}${var.stage_name}database"
+  name        = "${var.app_prefix}${var.stage_name}database"
   description = "Click logger Glue database"
 }
 
 resource "aws_glue_catalog_table" "aws_glue_click_logger_catalog_table" {
   name          = "${var.app_prefix}${var.stage_name}-table"
-  database_name = "${var.app_prefix}${var.stage_name}database"
-  depends_on    = [aws_glue_catalog_database.aws_glue_click_logger_database, aws_s3_bucket.click_logger_firehose_delivery_s3_bucket]
+  database_name = aws_glue_catalog_database.aws_glue_click_logger_database.name
 
   table_type = "EXTERNAL_TABLE"
 
@@ -20,18 +19,18 @@ resource "aws_glue_catalog_table" "aws_glue_click_logger_catalog_table" {
   }
 
   retention = 0
-  
+
   storage_descriptor {
-    location = aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.arn
+    location      = "s3://${aws_s3_bucket.click_logger_firehose_delivery_s3_bucket.id}/clicklog/"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
     compressed    = false
     parameters = {
-        "crawler_schema_serializer_version" = "1.0"
-        "crawler_schema_deserializer_version" = "1.0"
-        "compression_type" = "none"
-        "classification" = "json"
-        "type_of_data" = "file"
+      "crawler_schema_serializer_version"   = "1.0"
+      "crawler_schema_deserializer_version" = "1.0"
+      "compression_type"                    = "none"
+      "classification"                      = "json"
+      "type_of_data"                        = "file"
     }
     ser_de_info {
       name                  = "${var.app_prefix}table"
@@ -69,7 +68,7 @@ resource "aws_glue_catalog_table" "aws_glue_click_logger_catalog_table" {
       type    = "string"
       comment = ""
     }
-    
+
     columns {
       name    = "type"
       type    = "string"
@@ -87,5 +86,19 @@ resource "aws_glue_catalog_table" "aws_glue_click_logger_catalog_table" {
       type    = "string"
       comment = ""
     }
+  }
+}
+
+# Accounts that have opted into Lake Formation permissions (no IAM_ALLOWED_PRINCIPALS
+# defaults) require an explicit grant before Firehose can read the table schema for
+# Parquet conversion; IAM glue:GetTable alone is not sufficient. In accounts still using
+# IAM-only access control this grant is harmless.
+resource "aws_lakeformation_permissions" "firehose_table_describe" {
+  principal   = aws_iam_role.click_logger_stream_consumer_firehose_role.arn
+  permissions = ["DESCRIBE"]
+
+  table {
+    database_name = aws_glue_catalog_database.aws_glue_click_logger_database.name
+    name          = aws_glue_catalog_table.aws_glue_click_logger_catalog_table.name
   }
 }

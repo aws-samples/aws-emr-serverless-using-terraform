@@ -2,42 +2,16 @@ name := "loggregator"
 
 version := "0.1"
 
+// Matches the Scala version of Apache Spark 3.5.x on Amazon EMR 7.x
+scalaVersion := "2.12.18"
 
-scalaVersion := "2.12.17"
-
-lazy val root = (project in file(".")).
-  settings(
-    name := "loggregator",
-    version := "0.1",
-    maintainer := "shiva.ramani@live.com",
-    mainClass in Compile := Some("com.examples.clicklogger.Loggregator")
-  )
-
-val sparkVersion = "3.2.0"
-val hadoopVersion = "3.2.0"
+// Spark 3.5.8 ships with EMR Serverless emr-7.14.0. Spark and Hadoop are supplied by
+// the EMR runtime, so they are "provided" and not bundled into the job jar.
+val sparkVersion = "3.5.8"
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-core" % sparkVersion,
-  "org.apache.spark" %% "spark-sql" % sparkVersion,
-  "org.apache.hadoop" % "hadoop-client" % hadoopVersion,
-  "org.apache.hadoop" % "hadoop-aws" % hadoopVersion,
-  "org.apache.commons" % "commons-lang3" % "3.10",
-  "com.amazonaws" % "aws-java-sdk-s3" % "1.12.262",
-  "io.netty" % "netty-buffer" % "4.1.17.Final"
-
+  "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
+  "org.apache.spark" %% "spark-sql"  % sparkVersion % "provided"
 )
 
-val meta = """META.INF(.)*""".r
-assemblyMergeStrategy in assembly := {
-  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.first
-  case PathList(ps @ _*) if ps.last endsWith ".html" => MergeStrategy.first
-  case n if n.contains("services") => MergeStrategy.concat
-  case n if n.startsWith("reference.conf") => MergeStrategy.concat
-  case n if n.endsWith(".conf") => MergeStrategy.concat
-  case meta(_) => MergeStrategy.discard
-  case x => MergeStrategy.first
-  /*case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-  case x => MergeStrategy.first*/
-}
-
-enablePlugins(JavaAppPackaging)
+Compile / mainClass := Some("com.examples.clicklogger.Loggregator")

@@ -19,3 +19,7 @@ source/clicklogger/src/test/java/.DS_Store
 source/clicklogger/src/test/java/com/.DS_Store
 assets/.$emr-serverless-click-logs-from-web-application.drawio.bkp
 assets/.$emr-serverless-click-logs-from-web-application.drawio.dtmp
+tfplan
+terraform/workspaces/us-east-1/.terraform.lock.hcl
+source/loggregator/project/target
+source/loggregator/project/project

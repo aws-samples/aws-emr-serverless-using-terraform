@@ -1,0 +1,106 @@
+<mxfile host="Drawpyo" modified="2026-11-04T09:50:46" agent="Python 3.15, Drawpyo 0.23" version="21.6.5" type="device">
+  <diagram name="Page-1" id="4469465376">
+    <mxGraphModel dx="2037" dy="830" grid="1" gridSize="10" guides="1" toolTips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="4469466384" value="AWS Cloud" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;" vertex="1" parent="1">
+  <mxGeometry x="160" y="20" width="1020" height="700" as="geometry" />
+</mxCell>
+        <mxCell id="4463871632" value="Build &amp; deploy (local)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;fillColor=none;verticalAlign=top;align=left;spacingLeft=10;fontStyle=1;container=1;" vertex="1" parent="1">
+  <mxGeometry x="260" y="760" width="820" height="110" as="geometry" />
+</mxCell>
+        <mxCell id="4468728656" value="Region (us-east-1)" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;" vertex="1" parent="4469466384">
+  <mxGeometry x="20" y="40" width="980" height="640" as="geometry" />
+</mxCell>
+        <mxCell id="4462490832" value="AWS Step Functions workflow" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_step_functions_workflow;strokeColor=#CD2264;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#CD2264;dashed=0;" vertex="1" parent="4468728656">
+  <mxGeometry x="60" y="360" width="220" height="200" as="geometry" />
+</mxCell>
+        <mxCell id="4468729936" value="Ingestion&lt;br&gt;AWS Lambda function&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;java21 · arm64&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="4468728656">
+  <mxGeometry x="131" y="170" width="78" height="78" as="geometry" />
+</mxCell>
+        <mxCell id="4469965520" value="Amazon Data Firehose&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;JSON → Parquet&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.kinesis_data_firehose;" vertex="1" parent="4468728656">
+  <mxGeometry x="371" y="170" width="78" height="78" as="geometry" />
+</mxCell>
+        <mxCell id="4469967760" value="AWS Glue&lt;br&gt;Data Catalog&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;click log schema&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=middle;labelPosition=right;verticalAlign=middle;align=left;spacingLeft=6;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.glue;" vertex="1" parent="4468728656">
+  <mxGeometry x="371" y="40" width="60" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4469969360" value="firehose-delivery bucket&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;clicklog/data=YYYY-MM-DD/&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#7AA116;strokeColor=none;dashed=0;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.bucket_with_objects;verticalLabelPosition=middle;labelPosition=right;verticalAlign=middle;align=left;spacingLeft=8;" vertex="1" parent="4468728656">
+  <mxGeometry x="610" y="175" width="66" height="68" as="geometry" />
+</mxCell>
+        <mxCell id="4469973200" value="Amazon CloudWatch Logs&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Lambda · Firehose ·&lt;br&gt;EMR job · Step Functions&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;fillColor=#E7157B;resIcon=mxgraph.aws4.cloudwatch_2;" vertex="1" parent="4468728656">
+  <mxGeometry x="860" y="40" width="60" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4469974800" value="Amazon EMR Serverless&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;emr-7.14.0 · Spark 3.5 · arm64&lt;br&gt;auto-start / auto-stop&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;fillColor=#8C4FFF;resIcon=mxgraph.aws4.emr;" vertex="1" parent="4468728656">
+  <mxGeometry x="604" y="420" width="78" height="78" as="geometry" />
+</mxCell>
+        <mxCell id="4469979600" value="loggregator-source bucket&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Spark job jar&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#7AA116;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.bucket_with_objects;" vertex="400" parent="4468728656">
+  <mxGeometry x="400" y="515" width="66" height="68" as="geometry" />
+</mxCell>
+        <mxCell id="4471115920" value="loggregator-output bucket&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;YYYY/MM/DD/response.md&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#7AA116;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.bucket_with_objects;" vertex="1" parent="4468728656">
+  <mxGeometry x="860" y="380" width="66" height="68" as="geometry" />
+</mxCell>
+        <mxCell id="4471119120" value="emr-logs bucket&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;driver / executor logs&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#7AA116;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.bucket_with_objects;" vertex="1" parent="4468728656">
+  <mxGeometry x="860" y="520" width="66" height="68" as="geometry" />
+</mxCell>
+        <mxCell id="4471120400" value="State machine&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;emr-serverless:startJobRun.sync&lt;br&gt;(JSONata)&lt;/font&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.step_functions;" vertex="1" parent="4462490832">
+  <mxGeometry x="71" y="50" width="78" height="78" as="geometry" />
+</mxCell>
+        <mxCell id="4471121680" value="Developer" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3D;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;" vertex="1" parent="1">
+  <mxGeometry x="40" y="239" width="60" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4471123280" value="Developer" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3D;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;" vertex="1" parent="1">
+  <mxGeometry x="40" y="479" width="60" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4471124880" value="Developer" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3D;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;" vertex="1" parent="1">
+  <mxGeometry x="140" y="785" width="60" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4471127120" value="$ mvn clean package&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Lambda (Java 21)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Courier New;align=center;" vertex="1" parent="4463871632">
+  <mxGeometry x="20" y="35" width="230" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4471424336" value="$ sbt clean package&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Spark job (Scala)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Courier New;align=center;" vertex="1" parent="4463871632">
+  <mxGeometry x="295" y="35" width="230" height="60" as="geometry" />
+</mxCell>
+        <mxCell id="4471425936" value="$ terraform init&lt;br&gt;$ terraform plan -out=tfplan&lt;br&gt;$ terraform apply tfplan" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Courier New;align=left;spacingLeft=6;" vertex="1" parent="4463871632">
+  <mxGeometry x="570" y="30" width="230" height="70" as="geometry" />
+</mxCell>
+        <mxCell id="4473094560" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="4471121680" target="4468729936" value="Click events&lt;br&gt;(aws lambda invoke)">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473098256" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="4468729936" target="4469965520" value="PutRecord (JSON)">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473099936" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="4469965520" target="4469967760" value="Read schema">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473101952" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="4469965520" target="4469969360" value="Parquet (Snappy)">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473102960" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="4471123280" target="4471120400" value="start-execution&lt;br&gt;{InputDate}">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473103968" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.3;" edge="1" parent="1" source="4471120400" target="4469974800" value="StartJobRun&lt;br&gt;and wait for completion">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473104976" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="4469969360" target="4469974800" value="Read Parquet&lt;br&gt;for InputDate">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473105648" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0;entryY=0.8;" edge="1" parent="1" source="4469979600" target="4469974800" value="Job jar">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473106320" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.3;entryX=0;entryY=0.5;" edge="1" parent="1" source="4469974800" target="4471115920" value="Report">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473106992" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;exitX=1;exitY=0.85;entryX=0;entryY=0.5;" edge="1" parent="1" source="4469974800" target="4471119120" value="Spark logs">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473107664" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="4471124880" target="4463871632">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+        <mxCell id="4473108336" style="edgeStyle=orthogonalEdgeStyle;html=1;rounded=0;endArrow=block;endFill=1;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="4463871632" target="4469466384" value="Deploy">
+  <mxGeometry relative="1" as="geometry" />
+</mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

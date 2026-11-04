@@ -1,12 +1,20 @@
-$ sbt reload
+# Loggregator Spark job
 
-$ sbt compile
+Build (requires sbt 1.11+ and a JDK 17 or 21):
 
-$ sbt package
+```
+sbt clean package
+# -> target/scala-2.12/loggregator_2.12-0.1.jar
+```
 
-$ java -jar target/scala-2.13/loggregator-assembly-0.1.jar  com.examples.clicklogger "2020-06-15"  "clicklogger-dev-firehose-delivery-bucket-<your-account-number>" "clicklogger-dev-loggregator-output-bucket-<your-account-number>"
+Run on EMR Serverless (the Step Functions workflow does this for you):
 
-$ emr console
-
-- command-runner.jar
-- spark-submit --deploy-mode client --class com.examples.clicklogger.Loggregator s3://clicklogger-emr-source/loggregator-assembly-0.1.jar 2022-07-18 clicklogger-dev-firehose-delivery-bucket-<your-account-number> clicklogger-dev-loggregator-output-bucket-<your-account-number>
+```
+aws emr-serverless start-job-run \
+  --application-id <application-id> \
+  --execution-role-arn <job-execution-role-arn> \
+  --job-driver '{"sparkSubmit": {
+      "entryPoint": "s3://<source-bucket>/loggregator-0-0.1.jar",
+      "entryPointArguments": ["2026-11-04", "<firehose-delivery-bucket>", "<output-bucket>"],
+      "sparkSubmitParameters": "--class com.examples.clicklogger.Loggregator"}}'
+```
